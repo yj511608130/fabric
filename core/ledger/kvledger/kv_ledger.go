@@ -33,6 +33,7 @@ import (
 	"github.com/hyperledger/fabric/internal/pkg/txflags"
 	"github.com/hyperledger/fabric/protoutil"
 	"github.com/pkg/errors"
+	"github.com/seiflotfy/cuckoofilter"
 )
 
 var logger = flogging.MustGetLogger("kvledger")
@@ -41,6 +42,8 @@ var (
 	rwsetHashOpts    = &bccsp.SHA256Opts{}
 	snapshotHashOpts = &bccsp.SHA256Opts{}
 )
+
+const cuckooFilterCapacity = uint(100000000)
 
 // kvLedger provides an implementation of `ledger.PeerLedger`.
 // This implementation provides a key-value based data model
@@ -56,6 +59,7 @@ type kvLedger struct {
 	commitHash             []byte
 	hashProvider           ledger.HashProvider
 	snapshotsConfig        *ledger.SnapshotsConfig
+	cf                     *cuckoo.Filter
 	// isPvtDataStoreAheadOfBlockStore is read during missing pvtData
 	// reconciliation and may be updated during a regular block commit.
 	// Hence, we use atomic value to ensure consistent read.
@@ -90,6 +94,7 @@ func newKVLedger(initializer *lgrInitializer) (*kvLedger, error) {
 		hashProvider:    initializer.hashProvider,
 		snapshotsConfig: initializer.snapshotsConfig,
 		blockAPIsRWLock: &sync.RWMutex{},
+		cf:              cuckoo.NewFilter(cuckooFilterCapacity),
 	}
 
 	btlPolicy := pvtdatapolicy.ConstructBTLPolicy(&collectionInfoRetriever{ledgerID, l, initializer.ccInfoProvider})
@@ -152,6 +157,18 @@ func newKVLedger(initializer *lgrInitializer) (*kvLedger, error) {
 	l.configHistoryRetriever = initializer.configHistoryMgr.GetRetriever(ledgerID, l)
 
 	l.stats = initializer.stats
+
+	//Initialize cuckoofilter
+	txChan := make(chan []byte)
+
+	go func(ch chan<-[]byte) {
+		l.blockStore.RetrieveAllTxID(ch)
+	}(txChan)
+
+	for txID := range txChan {
+		l.cf.Insert(txID)
+	}
+
 	return l, nil
 }
 

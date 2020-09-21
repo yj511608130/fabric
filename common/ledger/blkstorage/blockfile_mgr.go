@@ -593,6 +593,25 @@ func (mgr *blockfileMgr) retrieveTransactionByID(txID string) (*common.Envelope,
 	return mgr.fetchTransactionEnvelope(loc)
 }
 
+func (mgr *blockfileMgr) retrieveAllTxID(ch chan<- []byte) error {
+	rangeScan := constructTxIDRangeScan("")
+	itr, err := mgr.index.db.GetIterator(rangeScan.startKey, rangeScan.stopKey)
+	if err != nil {
+		return err
+	}
+	defer itr.Release()
+	for itr.Next() {
+		if err := itr.Error(); err != nil {
+			return err
+		}
+		txID := itr.Key()[1:]
+		logger.Debugf("scan TxId , get %s", txID)
+		ch <- txID
+	}
+	close(ch)
+	return nil
+}
+
 func (mgr *blockfileMgr) retrieveTransactionByBlockNumTranNum(blockNum uint64, tranNum uint64) (*common.Envelope, error) {
 	logger.Debugf("retrieveTransactionByBlockNumTranNum() - blockNum = [%d], tranNum = [%d]", blockNum, tranNum)
 	if blockNum < mgr.firstPossibleBlockNumberInBlockFiles() {

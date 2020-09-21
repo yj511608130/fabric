@@ -77,6 +77,11 @@ func (store *BlockStore) RetrieveTxByID(txID string) (*common.Envelope, error) {
 	return store.fileMgr.retrieveTransactionByID(txID)
 }
 
+//RetrieveAllTxID returns all txID in key-value storage through a channel
+func (store *BlockStore) RetrieveAllTxID(ch chan<-[]byte) error {
+	return store.fileMgr.retrieveAllTxID(ch)
+}
+
 // RetrieveTxByBlockNumTranNum returns a transaction for the given <blockNum, tranNum>
 func (store *BlockStore) RetrieveTxByBlockNumTranNum(blockNum uint64, tranNum uint64) (*common.Envelope, error) {
 	return store.fileMgr.retrieveTransactionByBlockNumTranNum(blockNum, tranNum)
